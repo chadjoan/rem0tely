@@ -1,11 +1,11 @@
-module rem0tely;
+module remotely;
 
 import std.stdio;
 
 immutable string usage =
 `Usage:
-`~`rem0tely [options] user@host [options] -- command [args for command]
-`~`rem0tely --one-sided [options] user@host [options]
+`~`remotely [options] user@host [options] -- command [args for command]
+`~`remotely --one-sided [options] user@host [options]
 `~/+`
 `~`This requires the local machine to have an entry similar to this in its
 `~`/etc/exports file:
@@ -18,7 +18,7 @@ immutable string usage =
 `~`might also be a good idea to set up X11 forwarding if a graphical application
 `~`is being ran this way.
 `~`
-`~`The rem0tely-host program must be in the user's PATH on the host machine.
+`~`The remotely-host program must be in the user's PATH on the host machine.
 `~`
 `~`Options:
 `~`     --help
@@ -28,13 +28,13 @@ immutable string usage =
 `~`     --nfs-afterwards {on,off,earlier}
 `~`     --nfs-afterwards={on,off,earlier}
 `~`             This option determines whether the NFS service is left running
-`~`             or stopped after rem0tely finishes executing the remote task.
+`~`             or stopped after remotely finishes executing the remote task.
 `~`             The 'earlier' value will turn the NFS service off only if it
-`~`             was already off when rem0tely began executing.
+`~`             was already off when remotely began executing.
 `~`             The default is --nfs-afterwards=earlier
 `~`
 `~`     --no-sudo
-`~`             Prevents rem0tely from invoking itself with the 'sudo' command
+`~`             Prevents remotely from invoking itself with the 'sudo' command
 `~`             automatically when it runs into permissions problems.
 `~`
 `~`     --one-sided
@@ -42,7 +42,7 @@ immutable string usage =
 `~`             host, but do not run any commands on the host.  This will
 `~`             result in a shell session on the host that can be experimented
 `~`             with while the local machine has all NFS mechanisms set up.
-`~`             This is useful for debugging and observing rem0tely's system
+`~`             This is useful for debugging and observing remotely's system
 `~`             changes during a session.
 `~`             If this is used, the 'command' argument will be ignored, as
 `~`             well as any of its arguments and options.
@@ -77,7 +77,7 @@ class PrintUsage : Exception
 	this() { super(""); }
 }
 
-/// This is used when rem0tely escalates itself using sudo:
+/// This is used when remotely escalates itself using sudo:
 /// it does so by executing itself with sudo, which means
 /// that the first instance will need to exit as soon as
 /// the sudo'd instance finishes.  It exits by throwing this.
@@ -173,7 +173,7 @@ Config parseArgs(string[] args)
 	// The argument structure used to be more predictable...
 	if ( args.length < 4 ) {
 		printUsage();
-		stderr.writeln("rem0tely: Error: Need at least 3 arguments (including the --).");
+		stderr.writeln("remotely: Error: Need at least 3 arguments (including the --).");
 		throw new UsageException();
 	}
 	+/
@@ -201,7 +201,7 @@ Config parseArgs(string[] args)
 			{
 				printUsage();
 				stderr.writefln(
-					"rem0tely: Error: Missing value for argument "~optName);
+					"remotely: Error: Missing value for argument "~optName);
 				throw new UsageException();
 			}
 		}
@@ -215,7 +215,7 @@ Config parseArgs(string[] args)
 		void errorUnrecognizedValue() {
 			printUsage();
 			stderr.writefln(
-				"rem0tely: Error: "~
+				"remotely: Error: "~
 				"Unrecognized value for the %s option: %s", arg, value);
 			throw new UsageException();
 		}
@@ -254,20 +254,20 @@ Config parseArgs(string[] args)
 		else
 		{
 			printUsage();
-			stderr.writefln("rem0tely: Error: Unrecongized argument %s", arg);
+			stderr.writefln("remotely: Error: Unrecongized argument %s", arg);
 			throw new UsageException();
 		}
 	}
 
 	if ( cfg.userhost is null || cfg.userhost == "" ) {
 		printUsage();
-		stderr.writeln("rem0tely: Error: Missing user@host information.");
+		stderr.writeln("remotely: Error: Missing user@host information.");
 		throw new UsageException();
 	}
 
 	if ( !cfg.oneSided && (cfg.command is null || cfg.command == "") ) {
 		printUsage();
-		stderr.writeln("rem0tely: Error: Missing command to run.");
+		stderr.writeln("remotely: Error: Missing command to run.");
 		throw new UsageException();
 	}
 
@@ -316,9 +316,9 @@ void ensureNfsStarted(Config cfg)
 	if ( whichBash.status != 0 )
 	{
 		stderr.writeln (whichBash.output);
-		stderr.writeln ("rem0tely: Could not find bash.");
-		stderr.writeln ("rem0tely: Search was attempted by running 'which bash',");
-		stderr.writefln("rem0tely: but that returned code %d", whichBash.status);
+		stderr.writeln ("remotely: Could not find bash.");
+		stderr.writeln ("remotely: Search was attempted by running 'which bash',");
+		stderr.writefln("remotely: but that returned code %d", whichBash.status);
 		throw new AbortException();
 	}
 
@@ -403,7 +403,7 @@ void ensureNfsStarted(Config cfg)
 	else
 	if ( returnCode == 1 && output.strip == "" )
 	{
-		writeln("rem0tely: Started NFS server on local machine.");
+		writeln("remotely: Started NFS server on local machine.");
 		return; // Success.
 	}
 
@@ -422,9 +422,9 @@ void ensureNfsStarted(Config cfg)
 		sudoEscalate(cfg);
 
 	// Failure for reasons besides needing root access.
-	stderr.writeln ("rem0tely: Error: Failed to start NFS on local machine.");
-	stderr.writefln("rem0tely: Received return code %d from /etc/init.d/nfs.", returnCode);
-	stderr.writeln ("rem0tely: This makes it impossible to continue, so this operation will be aborted.");
+	stderr.writeln ("remotely: Error: Failed to start NFS on local machine.");
+	stderr.writefln("remotely: Received return code %d from /etc/init.d/nfs.", returnCode);
+	stderr.writeln ("remotely: This makes it impossible to continue, so this operation will be aborted.");
 	throw new AbortException();
 }
 
@@ -436,9 +436,9 @@ private string getBindPath(Config cfg)
 	import std.process : thisProcessID;
 
 	// We insert the PID to ensure that our link will not collide with other
-	// instances of rem0tely that might be started within the same second.
+	// instances of remotely that might be started within the same second.
 	// We insert the startTime to ensure that our link will not collide with
-	// with a future instance of rem0tely if the current instance fails to
+	// with a future instance of remotely if the current instance fails to
 	// delete its link or fails to remote its NFS export entry from the
 	// system's NFS exports table (the future instance would also need to have
 	// the incredible misfortune of receiving the same PID).
@@ -449,7 +449,7 @@ private string getBindPath(Config cfg)
 	// I know VMS doesn't format PIDs with %d (it conventionally uses hex to
 	// display PIDs), but is there any operating system that I care about that
 	// does it differently?
-	return format("/tmp/rem0tely-%s-%d",timestr,pid);
+	return format("/tmp/remotely-%s-%d",timestr,pid);
 }
 
 void setupNfsEntry(Config cfg)
@@ -488,7 +488,7 @@ void bindMount(Config cfg, string bindPath)
 
 	// We end up here if sudo failed.
 	// So we'll just report our version of what happened, and then exit.
-	stderr.writefln("rem0tely: Error: Failed to mount bind %s", bindPath);
+	stderr.writefln("remotely: Error: Failed to mount bind %s", bindPath);
 	throw new AbortException();
 }
 
@@ -523,7 +523,7 @@ void addExport(Config cfg, string bindPath)
 
 	// We end up here if sudo failed.
 	// So we'll just report our version of what happened, and then exit.
-	stderr.writeln("rem0tely: Error: Failed to add NFS share to exports table.");
+	stderr.writeln("remotely: Error: Failed to add NFS share to exports table.");
 	throw new AbortException();
 }
 
@@ -543,10 +543,10 @@ void removeMountPoint(Config cfg, string bindPath)
 		std.file.remove(bindPath);
 	catch ( FileException e ) {
 		stderr.writeln (e.msg);
-		stderr.writefln("rem0tely: Warning: Could not remove bind-mountable root-directory %s", bindPath);
-		stderr.writeln ("rem0tely:          This mount point is used to identify unique NFS settings.");
-		stderr.writeln ("rem0tely:          If it still exists, it shouldn't cause any");
-		stderr.writeln ("rem0tely:          problems.  It just adds clutter to /tmp");
+		stderr.writefln("remotely: Warning: Could not remove bind-mountable root-directory %s", bindPath);
+		stderr.writeln ("remotely:          This mount point is used to identify unique NFS settings.");
+		stderr.writeln ("remotely:          If it still exists, it shouldn't cause any");
+		stderr.writeln ("remotely:          problems.  It just adds clutter to /tmp");
 	}
 }
 
@@ -577,7 +577,7 @@ void bindUnmount(Config cfg, string bindPath)
 
 	// Issue a warning to ensure that the user will know there is something
 	// not quite right with this.
-	stderr.writefln("rem0tely: Warning: Failed to unmount bind %s", bindPath);
+	stderr.writefln("remotely: Warning: Failed to unmount bind %s", bindPath);
 }
 
 void removeExport(Config cfg, string bindPath)
@@ -588,15 +588,15 @@ void removeExport(Config cfg, string bindPath)
 	if ( wait(pid) == 0 )
 		return;
 
-	stderr.writeln("rem0tely: Warning: Failed remove NFS share (localhost:%s)", bindPath);
-	stderr.writeln("rem0tely:          from exports table.");
-	stderr.writeln("rem0tely:          The entry is only sharing to localhost, so");
-	stderr.writeln("rem0tely:          it should not cause significant security");
-	stderr.writeln("rem0tely:          issues, but this could junk up the exports table");
-	stderr.writeln("rem0tely:          If you desire to fix this, then you may want to");
-	stderr.writeln("rem0tely:          consult the 'exportfs' manpage to learn how to");
-	stderr.writeln("rem0tely:          use the 'exportfs' command to examine or remove");
-	stderr.writeln("rem0tely:          NFS exports table entries.");
+	stderr.writeln("remotely: Warning: Failed remove NFS share (localhost:%s)", bindPath);
+	stderr.writeln("remotely:          from exports table.");
+	stderr.writeln("remotely:          The entry is only sharing to localhost, so");
+	stderr.writeln("remotely:          it should not cause significant security");
+	stderr.writeln("remotely:          issues, but this could junk up the exports table");
+	stderr.writeln("remotely:          If you desire to fix this, then you may want to");
+	stderr.writeln("remotely:          consult the 'exportfs' manpage to learn how to");
+	stderr.writeln("remotely:          use the 'exportfs' command to examine or remove");
+	stderr.writeln("remotely:          NFS exports table entries.");
 }
 
 int runCommand(Config cfg)
@@ -609,7 +609,7 @@ int runCommand(Config cfg)
 	if ( cfg.oneSided )
 		hostCommand = "";
 	else
-		hostCommand = format("rem0tely-host %s %s",
+		hostCommand = format("remotely-host %s %s",
 			cfg.command, cfg.commandArgs.joiner(" "));
 
 	debug writefln("Running command %s", cfg.command);
@@ -651,7 +651,7 @@ private void sudoEscalate(Config cfg)
 	if ( cfg.neverSudo )
 		return;
 
-	stderr.writeln("rem0tely: Received permissions error.  Attempting to sudo.");
+	stderr.writeln("remotely: Received permissions error.  Attempting to sudo.");
 
 	// We add --no-sudo to prevent any possibility of infinite recursion.
 	auto pid = spawnProcess(["sudo"]~cfg.args[0]~["--no-sudo"]~cfg.args[1..$]);
