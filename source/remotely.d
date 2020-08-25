@@ -5,7 +5,7 @@ import std.stdio;
 immutable string usage =
 `Usage:
 `~`remotely [options] user@host [options] -- command [args for command]
-`~`remotely --one-sided [options] user@host [options]
+`~`remotely feign [options] user@host [options]
 `~/+`
 `~`This requires the local machine to have an entry similar to this in its
 `~`/etc/exports file:
@@ -21,25 +21,28 @@ immutable string usage =
 `~`The remotely-host program must be in the user's PATH on the host machine.
 `~`
 `~`Options:
+`~`     help
+`~`     -help
 `~`     --help
 `~`             Displays this help message.  All other arguments are ignored
 `~`             when this is used.
 `~`
-`~`     --nfs-afterwards {on,off,earlier}
-`~`     --nfs-afterwards={on,off,earlier}
+`~`     nfs-afterwards {on,off,same}
+`~`     nfs-afterwards={on,off,same}
 `~`             This option determines whether the NFS service is left running
 `~`             or stopped after remotely finishes executing the remote task.
-`~`             The 'earlier' value will turn the NFS service off only if it
+`~`             The 'same' value will turn the NFS service off only if it
 `~`             was already off when remotely began executing.
-`~`             The default is --nfs-afterwards=earlier
+`~`             The default is nfs-afterwards=same
 `~`
-`~`     --no-sudo
+`~`     no-sudo
 `~`             Prevents remotely from invoking itself with the 'sudo' command
 `~`             automatically when it runs into permissions problems.
 `~`
-`~`     --one-sided
-`~`             Set up the everything on the local machine and ssh into the
-`~`             host, but do not run any commands on the host.  This will
+`~`     feign
+`~`             Set up everything on the local machine and ssh into the
+`~`             host, but do not run a command on the host (the 'command'
+`~`             argument can be omitted if this one is passed).  This will
 `~`             result in a shell session on the host that can be experimented
 `~`             with while the local machine has all NFS mechanisms set up.
 `~`             This is useful for debugging and observing remotely's system
@@ -47,8 +50,8 @@ immutable string usage =
 `~`             If this is used, the 'command' argument will be ignored, as
 `~`             well as any of its arguments and options.
 `~`
-`~`     --ssh-opts <string>
-`~`     --ssh-opts=<string>
+`~`     ssh-opts <string>
+`~`     ssh-opts=<string>
 `~`             Pass the ssh options given in the string to the ssh invocation.
 `;
 
@@ -96,7 +99,7 @@ enum NfsAfterwards
 {
 	on,
 	off,
-	earlier
+	same
 }
 
 class Config
@@ -108,9 +111,9 @@ class Config
 	string         command;
 	string[]       commandArgs;
 	string         sshOpts = "";
-	bool           oneSided = false;
+	bool           feign = false;
 	bool           neverSudo = false;
-	NfsAfterwards  nfsAfter = NfsAfterwards.earlier;
+	NfsAfterwards  nfsAfter = NfsAfterwards.same;
 
 	// Internal state.
 	SysTime        startTime;
@@ -166,7 +169,7 @@ Config parseArgs(string[] args)
 	import std.algorithm.searching : canFind, findSplit, startsWith;
 
 	foreach(arg; args[1..$])
-		if ( arg == "--help" )
+		if ( arg == "help" || arg == "-help" || arg == "--help" )
 			throw new PrintUsage();
 
 	/+
@@ -206,11 +209,11 @@ Config parseArgs(string[] args)
 			}
 		}
 
-		if ( arg == "--nfs-afterwards" )
-			consumeValue("--nfs-afterwards");
+		if ( arg == "nfs-afterwards" )
+			consumeValue("nfs-afterwards");
 		else
-		if ( arg == "--ssh-opts" )
-			consumeValue("--ssh-opts");
+		if ( arg == "ssh-opts" )
+			consumeValue("ssh-opts");
 
 		void errorUnrecognizedValue() {
 			printUsage();
@@ -223,24 +226,24 @@ Config parseArgs(string[] args)
 		if ( arg.canFind('@') )
 			cfg.userhost = arg;
 		else
-		if ( arg == "--nfs-afterwards=" )
+		if ( arg == "nfs-afterwards=" )
 		{
 			switch(value)
 			{
-				case "on":      cfg.nfsAfter = NfsAfterwards.on;      break;
-				case "off":     cfg.nfsAfter = NfsAfterwards.off;     break;
-				case "earlier": cfg.nfsAfter = NfsAfterwards.earlier; break;
-				default:        errorUnrecognizedValue();
+				case "on":    cfg.nfsAfter = NfsAfterwards.on;      break;
+				case "off":   cfg.nfsAfter = NfsAfterwards.off;     break;
+				case "same":  cfg.nfsAfter = NfsAfterwards.same; break;
+				default:      errorUnrecognizedValue();
 			}
 		}
 		else
-		if ( arg == "--no-sudo" )
+		if ( arg == "no-sudo" )
 			cfg.neverSudo = true;
 		else
-		if ( arg == "--one-sided" )
-			cfg.oneSided = true;
+		if ( arg == "feign" )
+			cfg.feign = true;
 		else
-		if ( arg == "--ssh-opts" )
+		if ( arg == "ssh-opts" )
 			cfg.sshOpts = value;
 		else
 		if ( arg == "--" )
@@ -265,7 +268,7 @@ Config parseArgs(string[] args)
 		throw new UsageException();
 	}
 
-	if ( !cfg.oneSided && (cfg.command is null || cfg.command == "") ) {
+	if ( !cfg.feign && (cfg.command is null || cfg.command == "") ) {
 		printUsage();
 		stderr.writeln("remotely: Error: Missing command to run.");
 		throw new UsageException();
@@ -606,7 +609,7 @@ int runCommand(Config cfg)
 	import std.process;
 
 	string hostCommand;
-	if ( cfg.oneSided )
+	if ( cfg.feign )
 		hostCommand = "";
 	else
 		hostCommand = format("remotely-host %s %s",
@@ -631,9 +634,9 @@ void finalizeNfsService(Config cfg)
 			return;
 
 		case NfsAfterwards.off:
-		case NfsAfterwards.earlier:
+		case NfsAfterwards.same:
 			if ( cfg.nfsAfter == NfsAfterwards.off
-			||  (cfg.nfsAfter == NfsAfterwards.earlier && !cfg.nfsWasOn) )
+			||  (cfg.nfsAfter == NfsAfterwards.same && !cfg.nfsWasOn) )
 			{
 				auto pid = spawnShell(`script --quiet --return -c `~
 					`"/etc/init.d/nfs stop" /dev/null`);
@@ -653,8 +656,8 @@ private void sudoEscalate(Config cfg)
 
 	stderr.writeln("remotely: Received permissions error.  Attempting to sudo.");
 
-	// We add --no-sudo to prevent any possibility of infinite recursion.
-	auto pid = spawnProcess(["sudo"]~cfg.args[0]~["--no-sudo"]~cfg.args[1..$]);
+	// We add no-sudo to prevent any possibility of infinite recursion.
+	auto pid = spawnProcess(["sudo"]~cfg.args[0]~["no-sudo"]~cfg.args[1..$]);
 	throw new SudoEscalation(wait(pid));
 }
 
